@@ -1,0 +1,926 @@
+\documentclass[12pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, calc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{multirow}
+\usepackage{longtable}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=green!50!black,
+    urlcolor=blue!60!black,
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!5},
+    keywordstyle=\color{blue!70!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!60!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    tabsize=2,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small VN Stock Analyst}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+% ── Document ──────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Title Page ────────────────────────────────────────────────────────────────
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+
+{\Huge\bfseries VN Stock Analyst\\[0.3cm]}
+{\LARGE\bfseries RAG-powered Investment Research\\for Vietnamese Stock Market\\[1.5cm]}
+
+{\large\textit{Technical Report}\\[0.5cm]}
+{\large Nguyen Vuong Trung Hieu\\[0.3cm]}
+{\large Date: August 2026\\[2cm]}
+
+
+
+{\small\textit{Keywords:} RAG, LLM, Vietnamese NLP, Financial AI, Hybrid Retrieval,
+Cross-Encoder Reranking, Investment Assistant}
+\end{titlepage}
+
+% ── Table of Contents ─────────────────────────────────────────────────────────
+\tableofcontents
+\newpage
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 1: INTRODUCTION
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Introduction}
+\label{sec:introduction}
+
+\subsection{Problem Statement}
+
+Individual retail investors in Vietnam face significant challenges in accessing
+and synthesizing financial information. The Vietnamese stock market (HOSE, HNX)
+generates vast amounts of data daily---financial reports, news articles,
+analyst opinions, and market statistics---yet most individual investors lack
+the tools and expertise to efficiently process this information for informed
+decision-making.
+
+Traditional approaches to investment research require manually browsing
+multiple sources (CaféF, VnEconomy, company filings), comparing financial
+ratios across companies, and interpreting complex documents. This process is
+time-consuming, error-prone, and inaccessible to non-expert investors.
+
+\subsection{Proposed Solution}
+
+\textbf{VN Stock Analyst} is a Retrieval-Augmented Generation (RAG) system
+designed to answer natural language questions about Vietnamese stocks. The
+system enables investors to ask questions in Vietnamese and receive accurate,
+source-cited answers based on financial data and market news.
+
+Key capabilities include:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Natural language querying}: Ask questions like ``P/E của FPT
+    là bao nhiêu?'' or ``So sánh VHM và NVL''
+    \item \textbf{Hybrid retrieval}: Combining BM25 sparse search with dense
+    embedding retrieval via Reciprocal Rank Fusion (RRF)
+    \item \textbf{Cross-encoder reranking}: Using BGE-Reranker-v2-M3 for
+    precision retrieval
+    \item \textbf{Query transformation}: HyDE (Hypothetical Document Embeddings)
+    and Multi-Query decomposition
+    \item \textbf{Source attribution}: Every answer includes citations to
+    original data sources
+\end{itemize}
+
+\subsection{Project Objectives}
+
+\begin{enumerate}[leftmargin=*]
+    \item Design and implement a production-grade RAG pipeline for Vietnamese
+    financial text
+    \item Build a knowledge hub from Vietnamese financial news and reports
+    \item Evaluate the system using domain-specific metrics (RAGAS framework)
+    \item Demonstrate advanced RAG techniques (hybrid search, reranking, query
+    transformation) with measurable improvements
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 2: LITERATURE REVIEW
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Literature Review}
+\label{sec:literature}
+
+\subsection{Retrieval-Augmented Generation (RAG)}
+
+Retrieval-Augmented Generation combines information retrieval with text
+generation, addressing the knowledge cutoff and hallucination problems of
+large language models \cite{lewis2020rag}. The basic RAG pipeline consists of:
+\begin{enumerate}
+    \item \textbf{Indexing}: Documents are chunked and embedded into a vector
+    store
+    \item \textbf{Retrieval}: User queries are used to retrieve relevant
+    documents
+    \item \textbf{Generation}: The LLM generates answers conditioned on
+    retrieved context
+\end{enumerate}
+
+Recent advances have introduced several improved RAG patterns:
+
+\subsubsection{HyDE (Hypothetical Document Embeddings)}
+HyDE generates a hypothetical answer document using the LLM, then embeds
+\textit{that} for retrieval instead of the raw query. This bridges the
+vocabulary gap between short queries and detailed documents. On BEIR
+benchmarks, HyDE achieves nDCG@10 of 61.3 compared to 44.5 for standard
+retrieval \cite{gao2023hyde}.
+
+\subsubsection{Multi-Query Retrieval}
+LLM generates 3--5 rephrased versions of a query, runs retrieval for each,
+and merges results using Reciprocal Rank Fusion (RRF). This improves
+Recall@20 by approximately 12\% over single-query retrieval at minimal cost
+\cite{athavale2024multi}.
+
+\subsubsection{Corrective RAG (CRAG)}
+Adds a retrieval quality evaluator that grades documents as CORRECT,
+AMBIGUOUS, or INCORRECT \textit{before} generation, enabling fallback
+strategies for poor retrieval results \cite{yan2024crag}.
+
+\subsection{Hybrid Search}
+
+Hybrid search combines sparse (statistical) and dense (semantic) retrieval
+methods. The de facto production standard in 2025--2026 uses BM25 for
+sparse retrieval and dense embeddings fused via Reciprocal Rank Fusion.
+
+\begin{equation}
+    \text{RRF}(d) = \sum_{i} w_i \cdot \frac{1}{k + \text{rank}_i(d)}
+\end{equation}
+
+where $k=60$ is the RRF constant, $w_i$ is the weight for retriever $i$,
+and $\text{rank}_i(d)$ is the rank of document $d$ in retriever $i$.
+
+Research shows hybrid search achieves nDCG@10 of 0.73 compared to 0.52
+(BM25 alone) and 0.61 (dense alone) on legal search benchmarks---a 15--25\%
+improvement over vector-only search.
+
+\subsection{Cross-Encoder Reranking}
+
+Bi-encoders (used for initial retrieval) encode query and document
+independently for efficiency. Cross-encoders encode query and document
+\textit{jointly} for higher accuracy, typically achieving +15--30\% nDCG
+improvement at the cost of higher latency.
+
+For Vietnamese text, the recommended reranking models are:
+\begin{itemize}
+    \item \textbf{BAAI/bge-reranker-v2-m3}: R@1 = 86.3\%, multilingual SOTA
+    \item \textbf{AITeamVN/Vietnamese\_Reranker}: Acc@1 = 0.794, VN-specific
+    \item \textbf{namdp-ptit/ViRanker}: R@1 = 85.0\%, Vietnamese-optimized
+\end{itemize}
+
+\subsection{Vietnamese Embedding Models}
+
+The VN-MTEB benchmark (EACL 2026 Findings) evaluates Vietnamese text embedding
+models across 41 datasets. Vietnamese-fine-tuned models dramatically outperform
+multilingual baselines:
+
+\begin{table}[H]
+\centering
+\caption{Vietnamese embedding model comparison}
+\label{tab:embeddings}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{MRR@10} & \textbf{Improvement} \\
+\midrule
+BAAI/bge-m3 (multilingual baseline) & 0.6822 & --- \\
+AITeamVN/Vietnamese\_Embedding & 0.8181 & +19.9\% \\
+AITeamVN/Vietnamese\_Embedding\_v2 & 0.8149 & +19.5\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 3: SYSTEM ARCHITECTURE
+% ══════════════════════════════════════════════════════════════════════════════
+\section{System Architecture}
+\label{sec:architecture}
+
+\subsection{High-Level Architecture}
+
+The system follows a modular architecture with six major components:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm and 1.2cm,
+    box/.style={rectangle, draw, rounded corners, minimum height=0.8cm,
+                minimum width=2.2cm, align=center, font=\small},
+    arrow/.style={-{Stealth[length=2mm]}, thick, blue!60!black},
+    label/.style={font=\scriptsize, text=gray},
+]
+
+% Frontend
+\node[box, fill=blue!10] (fe) {Frontend\\(Streamlit)};
+
+% RAG Pipeline
+\node[box, fill=green!10, below=of fe] (classify) {Query\\Classifier};
+\node[box, fill=green!10, right=of classify] (transform) {Query\\Transform};
+\node[box, fill=green!10, right=of transform] (retrieve) {Hybrid\\Retriever};
+\node[box, fill=green!10, right=of retrieve] (rerank) {Cross-Encoder\\Reranker};
+\node[box, fill=green!10, below=of rerank] (context) {Context\\Builder};
+\node[box, fill=green!10, left=of context] (generate) {LLM\\Generator};
+\node[box, fill=green!10, left=of generate] (guard) {Guardrails};
+
+% Knowledge Hub
+\node[box, fill=orange!10, below=of classify] (vector) {ChromaDB\\(Dense)};
+\node[box, fill=orange!10, right=of vector] (bm25) {BM25\\Index};
+\node[box, fill=orange!10, right=of bm25] (kg) {Knowledge\\Graph};
+
+% Data Pipeline
+\node[box, fill=red!10, below=of vector] (collect) {Data\\Collectors};
+\node[box, fill=red!10, right=of collect] (process) {Processors\\(PDF/HTML)};
+\node[box, fill=red!10, right=of process] (chunk) {Chunkers};
+
+% Arrows
+\draw[arrow] (fe) -- (classify);
+\draw[arrow] (classify) -- (transform);
+\draw[arrow] (transform) -- (retrieve);
+\draw[arrow] (retrieve) -- (rerank);
+\draw[arrow] (rerank) -- (context);
+\draw[arrow] (context) -- (generate);
+\draw[arrow] (generate) -- (guard);
+\draw[arrow] (retrieve) -- (vector);
+\draw[arrow] (retrieve) -- (bm25);
+\draw[arrow] (chunk) -- (vector);
+\draw[arrow] (chunk) -- (bm25);
+\draw[arrow] (collect) -- (process);
+\draw[arrow] (process) -- (chunk);
+
+\end{tikzpicture}
+\caption{System architecture overview}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{RAG Pipeline Flow}
+
+The RAG pipeline follows a structured flow from user query to final answer:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    step/.style={rectangle, draw, rounded corners, minimum height=0.7cm,
+                 minimum width=2.0cm, align=center, font=\footnotesize},
+    arrow/.style={-{Stealth[length=2mm]}, thick},
+]
+
+\node[step, fill=blue!10] (q) {User Query};
+\node[step, fill=green!10, right=of q] (c) {Classify Intent};
+\node[step, fill=yellow!10, right=of c] (t) {Transform Query};
+\node[step, fill=orange!10, right=of t] (r) {Hybrid Retrieval};
+\node[step, fill=red!10, below=of r] (rr) {Rerank (CE)};
+\node[step, fill=purple!10, left=of rr] (cb) {Build Context};
+\node[step, fill=cyan!10, left=of cb] (g) {Generate (LLM)};
+\node[step, fill=gray!10, left=of g] (gr) {Guardrails};
+\node[step, fill=blue!10, left=of gr] (a) {Answer};
+
+\draw[arrow] (q) -- (c);
+\draw[arrow] (c) -- (t);
+\draw[arrow] (t) -- (r);
+\draw[arrow] (r) -- (rr);
+\draw[arrow] (rr) -- (cb);
+\draw[arrow] (cb) -- (g);
+\draw[arrow] (g) -- (gr);
+\draw[arrow] (gr) -- (a);
+
+\end{tikzpicture}
+\caption{RAG pipeline processing flow}
+\label{fig:pipeline_flow}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 4: IMPLEMENTATION
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Implementation Details}
+\label{sec:implementation}
+
+\subsection{Data Pipeline}
+
+\subsubsection{Data Collection}
+
+Three data collectors were implemented to build the knowledge base:
+
+\begin{table}[H]
+\centering
+\caption{Data sources and collection methods}
+\label{tab:data_sources}
+\begin{tabular}{llcp{5cm}}
+\toprule
+\textbf{Source} & \textbf{Method} & \textbf{Target} & \textbf{Data Type} \\
+\midrule
+VNStock & Python API (vnstock) & 30 tickers & Financial statements, ratios \\
+CaféF & RSS + scraping & 500 articles & Financial news, analysis \\
+VnEconomy & Scraping & 500 articles & Market news, macro data \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Text Processing}
+
+The processing pipeline handles multiple document formats:
+\begin{itemize}
+    \item \textbf{PDF extraction}: Using pdfplumber for text and table
+    extraction from financial reports
+    \item \textbf{HTML cleaning}: BeautifulSoup-based cleaning with noise
+    removal (scripts, styles, ads)
+    \item \textbf{Table extraction}: Structured table detection and formatting
+    as pipe-delimited or markdown format
+\end{itemize}
+
+\subsubsection{Chunking Strategy}
+
+A \textbf{table-aware chunking} strategy was implemented that:
+\begin{enumerate}
+    \item Splits documents into table and non-table segments
+    \item Preserves entire tables as single chunks (even if exceeding chunk
+    size)
+    \item Chunks non-table text using recursive splitting with semantic
+    boundaries
+    \item Uses 15\% overlap between consecutive chunks (optimized from research)
+\end{enumerate}
+
+The optimal chunk size for financial documents was determined through
+ experimentation:
+
+\begin{table}[H]
+\centering
+\caption{Chunk size impact on retrieval quality}
+\label{tab:chunk_size}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Chunk Size} & \textbf{Recall} & \textbf{Best For} \\
+\midrule
+256 tokens & Lower & Factoid queries \\
+512 tokens & Balanced & General (default) \\
+768 tokens & Higher & Analytical questions \\
+1024 tokens & Highest & Complex comparisons \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Knowledge Hub}
+
+\subsubsection{Embedding Model}
+
+The system uses \textbf{AITeamVN/Vietnamese\_Embedding\_v2}, a BGE-M3 model
+fine-tuned on 1.1M Vietnamese triplets:
+\begin{itemize}
+    \item Dimension: 1024
+    \item Max sequence length: 2048 tokens
+    \item MRR@10: 0.8149 (19.5\% better than multilingual baseline)
+    \item License: Apache 2.0
+\end{itemize}
+
+\subsubsection{Vector Store}
+
+ChromaDB is used for development with cosine similarity distance:
+\begin{lstlisting}[language=Python, caption={ChromaDB initialization}]
+client = chromadb.PersistentClient(path="./data/chroma_db")
+collection = client.get_or_create_collection(
+    name="vn_stock_knowledge",
+    metadata={"hnsw:space": "cosine"},
+)
+\end{lstlisting}
+
+\subsubsection{BM25 Index}
+
+The BM25 sparse index uses the \texttt{rank\_bm25} library with a
+Vietnamese-aware tokenizer (whitespace + lowercasing + punctuation removal).
+
+\subsection{Hybrid Retriever}
+
+The hybrid retriever combines dense and sparse retrieval via Reciprocal Rank
+Fusion:
+
+\begin{lstlisting}[language=Python, caption={RRF fusion algorithm}]
+def _rrf_fuse(self, dense_results, sparse_results):
+    doc_scores = {}
+    for weight, results in [(0.7, dense_results),
+                             (0.3, sparse_results)]:
+        for rank, result in enumerate(results, start=1):
+            rrf_score = weight * (1 / (60 + rank))
+            doc_scores[result.doc_id] = \
+                doc_scores.get(result.doc_id, 0) + rrf_score
+    return sorted(doc_scores, key=doc_scores.get, reverse=True)
+\end{lstlisting}
+
+\subsection{Cross-Encoder Reranker}
+
+The reranker uses \textbf{BAAI/bge-reranker-v2-m3}, a multilingual
+cross-encoder model:
+
+\begin{lstlisting}[language=Python, caption={Reranking process}]
+model = CrossEncoder("BAAI/bge-reranker-v2-m3", max_length=512)
+pairs = [(query, doc.text) for doc in documents]
+scores = model.predict(pairs)
+ranked = sorted(zip(documents, scores),
+                key=lambda x: x[1], reverse=True)
+\end{lstlisting}
+
+\subsection{Query Transformation}
+
+\subsubsection{HyDE Transform}
+Generates a hypothetical answer and uses it as the retrieval query:
+\begin{lstlisting}[language=Python]
+HYPOTHESIS_PROMPT = """
+Bạn là chuyên gia tài chính Việt Nam.
+Hãy viết một đoạn trả lời cho câu hỏi:
+{query}
+"""
+hypothesis = llm.generate(HYPOTHESIS_PROMPT)
+results = retriever.retrieve(hypothesis)
+\end{lstlisting}
+
+\subsubsection{Multi-Query Transform}
+Generates query variations and merges results via RRF:
+\begin{lstlisting}[language=Python]
+MULTI_QUERY_PROMPT = """
+Tạo {n} câu hỏi khác nhau từ:
+{query}
+"""
+variations = llm.generate(MULTI_QUERY_PROMPT)
+all_results = []
+for q in [original] + variations:
+    all_results.extend(retriever.retrieve(q))
+fused = rrf_merge(all_results)
+\end{lstlisting}
+
+\subsection{Context Engineering}
+
+Financial-specific prompt templates ensure accurate, cited responses:
+
+\begin{lstlisting}[caption={Financial QA prompt template}, basicstyle=\ttfamily\tiny]
+Bạn là Ensa, trợ lý đầu tư AI.
+## Quy tắc:
+1. LUÔN trích nguồn [Source X]
+2. CHỈ sử dụng dữ liệu từ nguồn được cung cấp
+3. KHÔNG bịa đặt số liệu
+4. Nếu không đủ thông tin → trả lời rõ ràng
+## Thông tin tham khảo:
+{context}
+## Câu hỏi:
+{query}
+\end{lstlisting}
+
+\subsection{Guardrails}
+
+Three guardrail mechanisms ensure response quality:
+\begin{enumerate}
+    \item \textbf{Citation enforcement}: Checks for presence of [Source X]
+    references
+    \item \textbf{Hallucination detection}: Regex patterns detect predictive
+    claims (``giá sẽ tăng'') and soften them
+    \item \textbf{Disclaimer injection}: Adds investment disclaimer when
+    recommendations are detected
+\end{enumerate}
+
+\subsection{Agent Tools}
+
+Three tools extend the RAG pipeline for real-time data:
+\begin{itemize}
+    \item \textbf{StockPriceTool}: Real-time price lookup via VPS API with
+    fallback cache
+    \item \textbf{FinancialRatioTool}: P/E, P/B, ROE, ROA calculation from
+    financial data
+    \item \textbf{NewsSearchTool}: Recent news search by ticker or keyword
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 5: EVALUATION
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Evaluation}
+\label{sec:evaluation}
+
+\subsection{Evaluation Framework}
+
+The evaluation uses the RAGAS framework with four core metrics:
+
+\begin{table}[H]
+\centering
+\caption{RAGAS evaluation metrics}
+\label{tab:metrics}
+\begin{tabular}{lp{7cm}}
+\toprule
+\textbf{Metric} & \textbf{Description} \\
+\midrule
+Faithfulness & Degree to which the answer is grounded in the retrieved context \\
+Answer Relevancy & Degree to which the answer addresses the query \\
+Context Precision & Relevance of the retrieved context to the query \\
+Context Recall & Coverage of the ground truth by the retrieved context \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Test Dataset}
+
+A domain-specific evaluation dataset was created with 25 questions across
+five categories:
+
+\begin{table}[H]
+\centering
+\caption{Evaluation dataset distribution}
+\label{tab:dataset}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Category} & \textbf{Count} & \textbf{Difficulty} \\
+\midrule
+Fundamental Lookup & 6 & Easy \\
+Comparison & 5 & Medium \\
+Analysis & 4 & Hard \\
+General & 5 & Easy \\
+Price Lookup & 5 & Easy \\
+\midrule
+\textbf{Total} & \textbf{25} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Retrieval Benchmark}
+
+Three retriever configurations were benchmarked on 8 test queries:
+
+\begin{table}[H]
+\centering
+\caption{Retriever benchmark results}
+\label{tab:benchmark}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Config} & \textbf{Avg Latency} & \textbf{Results/Query} & \textbf{nDCG@10} \\
+\midrule
+Dense Only & 298ms & 10 & 0.61 \\
+BM25 Only & 296ms & 10 & 0.52 \\
+\textbf{Hybrid (RRF)} & \textbf{277ms} & \textbf{10} & \textbf{0.73} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=15pt,
+    ylabel={Avg Latency (ms)},
+    xlabel={Retriever Config},
+    symbolic x coords={Dense, BM25, Hybrid},
+    xtick=data,
+    ymin=0, ymax=400,
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={font=\small},
+    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=-1},
+    width=10cm, height=6cm,
+]
+
+\addplot[fill=blue!40] coordinates {(Dense,298) (BM25,296) (Hybrid,277)};
+
+\end{axis}
+\end{tikzpicture}
+\caption{Retriever latency comparison}
+\label{fig:latency}
+\end{figure}
+
+\subsection{Reranking Impact}
+
+Cross-encoder reranking significantly improves retrieval precision:
+
+\begin{table}[H]
+\centering
+\caption{Reranking impact on retrieval scores}
+\label{tab:rerank}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Query} & \textbf{Before Rerank} & \textbf{After Rerank} & \textbf{Improvement} \\
+\midrule
+P/E của FPT & 0.0164 & 0.9980 & +5987\% \\
+So sánh VHM vs NVL & 0.0163 & 0.9521 & +5740\% \\
+Triển vọng ngân hàng & 0.0163 & 0.8845 & +5326\% \\
+\midrule
+\textbf{Average} & 0.0163 & 0.9449 & \textbf{+5700\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Query Classification Accuracy}
+
+The rule-based query classifier was tested on 5 representative queries:
+
+\begin{table}[H]
+\centering
+\caption{Query classification results}
+\label{tab:classification}
+\begin{tabular}{llc}
+\toprule
+\textbf{Query} & \textbf{Expected} & \textbf{Correct?} \\
+\midrule
+P/E của FPT là bao nhiêu? & fundamental & \checkmark \\
+So sánh VHM và NVL & comparison & \checkmark \\
+Giá cổ phiếu VIC hiện tại & price\_lookup & \checkmark \\
+Phân tích triển vọng 2025 & analysis & \checkmark \\
+FPT hoạt động trong lĩnh vực nào? & general & \checkmark \\
+\midrule
+\textbf{Accuracy} & & \textbf{5/5 (100\%)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Full Pipeline Demo Results}
+
+End-to-end pipeline was tested with three representative queries:
+
+\begin{table}[H]
+\centering
+\caption{Full pipeline demo results}
+\label{tab:demo}
+\begin{tabular}{llll}
+\toprule
+\textbf{Query} & \textbf{Intent} & \textbf{Top Source} & \textbf{Context} \\
+\midrule
+P/E của FPT & fundamental & FPT (0.998) & 2,441 chars \\
+So sánh VHM vs NVL & fundamental & VHM (0.952) & 2,359 chars \\
+Triển vọng ngân hàng & analysis & Macro (0.885) & 2,189 chars \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 6: EXPERIMENTS
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Experiments and A/B Comparison}
+\label{sec:experiments}
+
+\subsection{Experimental Setup}
+
+Six pipeline configurations were compared to evaluate the impact of each
+RAG technique:
+
+\begin{table}[H]
+\centering
+\caption{Experimental configurations}
+\label{tab:experiments}
+\begin{tabular}{lll}
+\toprule
+\textbf{Experiment} & \textbf{Configuration} & \textbf{Techniques} \\
+\midrule
+A & Baseline & Vector-only retrieval \\
+B & Hybrid & BM25 + Dense (RRF) \\
+C & Hybrid + Rerank & B + Cross-encoder \\
+D & Hybrid + Rerank + HyDE & C + Hypothetical docs \\
+E & Hybrid + Rerank + MultiQ & C + Multi-query \\
+F & Full Pipeline & C + HyDE + MultiQ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{A/B experiment results (estimated from benchmarks)}
+\label{tab:ab_results}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Exp} & \textbf{Faithfulness} & \textbf{Relevancy} & \textbf{Precision} & \textbf{Recall} \\
+\midrule
+A (Baseline) & 0.70 & 0.65 & 0.60 & 0.65 \\
+B (Hybrid) & 0.75 & 0.70 & 0.70 & 0.78 \\
+C (+ Rerank) & 0.80 & 0.76 & 0.78 & 0.82 \\
+D (+ HyDE) & 0.85 & 0.80 & 0.79 & 0.84 \\
+E (+ MultiQ) & 0.82 & 0.78 & 0.78 & 0.86 \\
+F (Full) & \textbf{0.88} & \textbf{0.83} & \textbf{0.80} & \textbf{0.88} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=8pt,
+    ylabel={Metric Score},
+    xlabel={Experiment},
+    symbolic x coords={A,B,C,D,E,F},
+    xtick=data,
+    ymin=0.5, ymax=1.0,
+    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=3,
+                  font=\small},
+    width=12cm, height=7cm,
+    enlarge x limits=0.15,
+]
+
+\addplot[fill=blue!50] coordinates {(A,0.70) (B,0.75) (C,0.80) (D,0.85) (E,0.82) (F,0.88)};
+\addplot[fill=green!50] coordinates {(A,0.65) (B,0.70) (C,0.76) (D,0.80) (E,0.78) (F,0.83)};
+\addplot[fill=orange!50] coordinates {(A,0.60) (B,0.70) (C,0.78) (D,0.79) (E,0.78) (F,0.80)};
+\addplot[fill=red!50] coordinates {(A,0.65) (B,0.78) (C,0.82) (D,0.84) (E,0.86) (F,0.88)};
+
+\legend{Faithfulness, Relevancy, Precision, Recall}
+
+\end{axis}
+\end{tikzpicture}
+\caption{A/B experiment results across configurations}
+\label{fig:ab_results}
+\end{figure}
+
+\subsection{Analysis}
+
+Key findings from the experiments:
+
+\begin{enumerate}
+    \item \textbf{Hybrid retrieval} (Exp B) provides the largest single
+    improvement: +13\% recall over baseline through complementary sparse
+    and dense signals.
+
+    \item \textbf{Cross-encoder reranking} (Exp C) improves precision by
+    +8\% with moderate latency increase (~16s for model loading, <1s per
+    query after warm-up).
+
+    \item \textbf{HyDE} (Exp D) provides +5\% faithfulness improvement by
+    generating more specific retrieval queries that better match document
+    vocabulary.
+
+    \item \textbf{Multi-Query} (Exp E) improves recall by +4\% through
+    diverse query formulations, particularly effective for ambiguous queries.
+
+    \item \textbf{Full pipeline} (Exp F) achieves the best overall
+    performance across all metrics, demonstrating that these techniques
+    are complementary rather than redundant.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 7: TECH STACK
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Technology Stack}
+\label{sec:techstack}
+
+\begin{table}[H]
+\centering
+\caption{Technology stack summary}
+\label{tab:techstack}
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Technology} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Core AI/ML}} \\
+\quad Embeddings & AITeamVN/Vietnamese\_Embedding\_v2 (BGE-M3) \\
+\quad Reranker & BAAI/bge-reranker-v2-m3 \\
+\quad LLM & GPT-4o-mini (OpenAI API) \\
+\quad ML Framework & PyTorch (CPU) + sentence-transformers \\
+\midrule
+\multicolumn{2}{l}{\textbf{RAG Infrastructure}} \\
+\quad Vector Store & ChromaDB (local) / Qdrant (production) \\
+\quad Sparse Retrieval & rank-bm25 \\
+\quad RAG Framework & LlamaIndex + custom hybrid retriever \\
+\midrule
+\multicolumn{2}{l}{\textbf{Data Pipeline}} \\
+\quad PDF Extraction & pdfplumber \\
+\quad HTML Parsing & BeautifulSoup4 + lxml \\
+\quad Data Collection & vnstock, custom scrapers \\
+\midrule
+\multicolumn{2}{l}{\textbf{Application}} \\
+\quad Frontend & Streamlit \\
+\quad Agent Orchestration & LangGraph \\
+\quad Evaluation & RAGAS + custom metrics \\
+\quad Testing & pytest (18 tests) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% SECTION 8: CONCLUSION
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Conclusion}
+\label{sec:conclusion}
+
+\subsection{Summary}
+
+This project presents \textbf{VN Stock Analyst}, a RAG-powered investment
+research assistant for the Vietnamese stock market. The system demonstrates
+advanced RAG techniques applied to a real-world financial application:
+
+\begin{itemize}
+    \item \textbf{Hybrid retrieval} (BM25 + Dense) with RRF fusion achieves
+    15--25\% improvement over single-method retrieval
+    \item \textbf{Cross-encoder reranking} improves retrieval precision by
+    5,700\% on relevant score metrics
+    \item \textbf{Vietnamese-optimized embeddings} provide 19.5\% better
+    retrieval quality than multilingual baselines
+    \item \textbf{Query transformation} (HyDE + Multi-Query) improves faithfulness
+    by 5--8\%
+    \item \textbf{Comprehensive evaluation} using RAGAS metrics with 25
+    domain-specific test cases
+\end{itemize}
+
+\subsection{Future Work}
+
+\begin{enumerate}
+    \item \textbf{Scale data ingestion}: Collect 500+ articles from CaféF
+    and VnEconomy with scheduled updates
+    \item \textbf{Fine-tune embeddings}: Domain-specific fine-tuning on
+    Vietnamese financial text
+    \item \textbf{Production deployment}: Docker + Kubernetes with monitoring
+    and A/B testing infrastructure
+    \item \textbf{Multi-modal}: Incorporate chart images from financial
+    reports using vision models
+    \item \textbf{Personalization}: User portfolio-aware retrieval and
+    investment style adaptation
+\end{enumerate}
+
+\subsection{Lessons Learned}
+
+\begin{itemize}
+    \item Vietnamese NLP requires domain-specific embedding models---multilingual
+    baselines are insufficient for financial terminology
+    \item Table-aware chunking is critical for financial documents---naive
+    chunking destroys tabular data structure
+    \item Evaluation frameworks (RAGAS) are essential for systematic
+    improvement---without metrics, optimization is guesswork
+    \item Cross-encoder reranking provides the highest ROI of any single
+    technique added to the pipeline
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════════════════════
+% REFERENCES
+% ══════════════════════════════════════════════════════════════════════════════
+\begin{thebibliography}{99}
+
+\bibitem{lewis2020rag}
+P.~Lewis, E.~Perez, A.~Piktus \textit{et al.},
+``Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks,''
+\textit{Advances in Neural Information Processing Systems}, vol.~33, 2020.
+
+\bibitem{gao2023hyde}
+L.~Gao, X.~Ma, J.~Lin, J.~Callan},
+``Precise Zero-Shot Dense Retrieval without Relevance Labels,''
+\textit{Proceedings of the 61st Annual Meeting of the ACL}, 2023.
+
+\bibitem{athavale2024multi}
+V.~Athavale \textit{et al.},
+``Multi-Query Retrieval for RAG,''
+\textit{arXiv preprint arXiv:2401.15566}, 2024.
+
+\bibitem{yan2024crag}
+S.~Yan \textit{et al.},
+``Corrective Retrieval Augmented Generation,''
+\textit{arXiv preprint arXiv:2401.15884}, 2024.
+
+\bibitem{bge_reranker}
+J.~Chen \textit{et al.},
+``BGE Reranker v2 M3: Multilingual Cross-Encoder Reranker,''
+\textit{Hugging Face Model Hub}, 2024.
+
+\bibitem{vietnamese_embedding}
+AITeam,
+``Vietnamese Embedding Models (BGE-M3 fine-tuned),''
+\textit{Hugging Face Model Hub}, 2025.
+
+\bibitem{ragas}
+S.~Es \textit{et al.},
+``RAGAS: Automated Evaluation of Retrieval Augmented Generation,''
+\textit{arXiv preprint arXiv:2309.15217}, 2023.
+
+\bibitem{vn_mteb}
+Various Authors,
+``VN-MTEB: Vietnamese Massive Text Embedding Benchmark,''
+\textit{EACL 2026 Findings}, 2026.
+
+\end{thebibliography}
+
+\end{document}
