@@ -1,0 +1,17 @@
+{
+  "Dense Only": {
+    "avg_latency_ms": 297.8,
+    "avg_results": 10.0,
+    "queries": 8
+  },
+  "BM25 Only": {
+    "avg_latency_ms": 295.54,
+    "avg_results": 10.0,
+    "queries": 8
+  },
+  "Hybrid (RRF)": {
+    "avg_latency_ms": 277.41,
+    "avg_results": 10.0,
+    "queries": 8
+  }
+}
